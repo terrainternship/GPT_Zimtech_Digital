@@ -1,8 +1,9 @@
+from typing import Any
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from dotenv import load_dotenv
 import os
-import httpx
+import aiohttp
 import logging
 
 
@@ -21,7 +22,6 @@ logger = logging.getLogger(__name__)
 
 TOKEN = os.getenv('TG_TOKEN')
 API_URL = "http://127.0.0.1:8000"
-timeout = httpx.Timeout(300.0, read=None)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -32,14 +32,14 @@ async def text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info("User:")
     logger.info(update.message.text)
 
-    payload = {"text": update.message.text}
-    response = await request_post(f"{API_URL}/api/get_answer", payload)
-
     answer = ""
-    if response.status_code == 200:
-        answer = response.json()['message']
-    else:
-        answer = f'Ошибка при получении данных. Код статуса: {response.status_code}, текст: "{response.text}"'
+    try:
+        payload = {"text": update.message.text}
+        result = await request_post(f"{API_URL}/api/get_answer", payload)
+        answer = result['message']
+    except Exception as e:
+        logger.exception(e)
+        answer = f'Ошибка при получении ответа: {e}'
 
     logger.info("Bot:")
     logger.info(answer)
@@ -47,14 +47,18 @@ async def text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(answer)
 
 
-async def request_get(url: str) -> httpx.Response:
-    async with httpx.AsyncClient() as client:
-        return await client.get(url, timeout=timeout)
+async def request_get(url) -> Any:
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            resp.raise_for_status()
+            return await resp.json()
 
 
-async def request_post(url: str, data) -> httpx.Response:
-    async with httpx.AsyncClient() as client:
-        return await client.post(url, json=data, timeout=timeout)
+async def request_post(url: str, data) -> Any:
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=data) as resp:
+            resp.raise_for_status()
+            return await resp.json()
 
 
 def main():

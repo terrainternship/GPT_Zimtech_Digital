@@ -34,6 +34,6 @@ app.add_middleware(
 
 # функция обработки post запроса + декоратор 
 @app.post("/api/get_answer")
-def get_answer(question: Question):
-    answer = chunks.get_answer(query=question.text)
+async def get_answer(question: Question):
+    answer = await chunks.get_answer(query=question.text)
     return {"message": answer}
